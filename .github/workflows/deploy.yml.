@@ -1,4 +1,4 @@
-name: Deploy to AWS
+name: Deploy to AWS EC2 and S3
 
 on:
   push:
@@ -11,18 +11,39 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-
-      - name: Install Dependencies
-        run: npm install
-
       - name: Run Tests
-        run: npm test
+        run: echo "No tests for static site"
 
-  deploy:
+  deploy-ec2:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Copy files to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "./*"
+          target: "/home/ec2-user/app"
+
+      - name: Run commands on EC2
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            sudo dnf install -y nginx
+            sudo systemctl enable nginx
+            sudo systemctl start nginx
+            sudo rm -rf /usr/share/nginx/html/*
+            sudo cp -r /home/ec2-user/app/* /usr/share/nginx/html/
+
+  deploy-s3:
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -37,4 +58,4 @@ jobs:
           aws-region: ap-south-1
 
       - name: Deploy to S3
-        run: aws s3 sync ./ s3://my-sample-bucket --delete
+        run: aws s3 sync ./ s3://my-sample-logi-bucket --delete
